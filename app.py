@@ -45,23 +45,36 @@ def generate_random_object():
 def generate_hint(target_object: str, previous_hints: list):
     """Generate and log a hint for the target object."""
     try:
-        # Include previous hints in the prompt to avoid repetition
         previous_hints_str = "\nPrevious hints: " + "; ".join(previous_hints) if previous_hints else ""
         
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": f"""Generate a helpful but not too obvious hint for the object '{target_object}'.
-                The hint should:
-                - Be a single short sentence
-                - Not directly reveal what the object is
+                {"role": "system", "content": f"""Generate a cryptic, clever hint for the object '{target_object}'.
+                The hint MUST:
+                - Be abstract or metaphorical
+                - Never mention the object's direct use or common location
+                - Use wordplay, analogies, or indirect references
                 - Be different from these previous hints: {previous_hints_str}
-                - Focus on a characteristic, use, or context of the object
+                - Be challenging but not impossible to decode
+                
+                Examples for a "book":
+                BAD (too obvious): "You can read this object"
+                GOOD: "Time's whispers caught in paper dreams"
+                
+                For a "chair":
+                BAD (too obvious): "You sit on this furniture"
+                GOOD: "Four-legged throne for common kings"
+                
+                For a "phone":
+                BAD (too obvious): "You use this to call people"
+                GOOD: "Pocket portal to distant worlds"
+                
                 Respond with just the hint, nothing else."""},
-                {"role": "user", "content": "Generate a hint."}
+                {"role": "user", "content": "Generate a cryptic hint."}
             ],
             max_tokens=50,
-            temperature=0.7
+            temperature=0.9
         )
         hint = response.choices[0].message.content.strip()
         return {
@@ -112,8 +125,11 @@ def process_guess(guess: str, target_object: str):
     }
 
 def initialize_game_state():
-    if 'target_object' not in st.session_state:
+    """Initialize or reset game state."""
+    if 'initialized' not in st.session_state:
         st.session_state.target_object = generate_random_object()
+        st.session_state.initialized = True
+    
     if 'questions_asked' not in st.session_state:
         st.session_state.questions_asked = []
     if 'question_count' not in st.session_state:
@@ -124,6 +140,15 @@ def initialize_game_state():
         st.session_state.hints_used = []
     if 'hints_remaining' not in st.session_state:
         st.session_state.hints_remaining = 2
+
+def reset_game():
+    """Reset the game with a new object."""
+    st.session_state.target_object = generate_random_object()
+    st.session_state.questions_asked = []
+    st.session_state.question_count = 0
+    st.session_state.game_over = False
+    st.session_state.hints_used = []
+    st.session_state.hints_remaining = 2
 
 def main():
     st.title("20 Questions Game 🎮")
@@ -136,7 +161,7 @@ def main():
     ### How to Play:
     1. Think of a question that can be answered with Yes/No
     2. You have 20 questions to guess the object
-    3. You can use up to 2 hints during the game
+    3. You can use up to 2 hints during the game (they're cryptic!)
     4. Make your guess when you're ready!
     """)
 
@@ -167,7 +192,6 @@ def main():
     # Submit question button
     if st.button("Ask", disabled=st.session_state.game_over):
         if question:
-            # Process and log the question
             qa_result = process_question(question, st.session_state.target_object)
             st.session_state.questions_asked.append((qa_result["question"], qa_result["answer"]))
             st.session_state.question_count += 1
@@ -176,7 +200,6 @@ def main():
     guess = st.text_input("Make your guess:", disabled=st.session_state.game_over)
     
     if st.button("Submit Guess", disabled=st.session_state.game_over):
-        # Process and log the guess
         guess_result = process_guess(guess, st.session_state.target_object)
         
         if guess_result["is_correct"]:
@@ -197,14 +220,7 @@ def main():
 
     # New game button
     if st.button("New Game") or st.session_state.question_count >= 20:
-        # Generate and log new target object
-        new_object = generate_random_object()
-        st.session_state.target_object = new_object
-        st.session_state.questions_asked = []
-        st.session_state.question_count = 0
-        st.session_state.game_over = False
-        st.session_state.hints_used = []
-        st.session_state.hints_remaining = 2
+        reset_game()
         st.rerun()
 
 if __name__ == "__main__":
