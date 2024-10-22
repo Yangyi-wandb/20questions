@@ -1,10 +1,8 @@
-
 import os
 import weave
 import streamlit as st
 from openai import OpenAI
 import random
-
 
 # Determine if we're running in a Streamlit Cloud environment
 is_streamlit_cloud = os.environ.get('STREAMLIT_RUNTIME') == 'true'
@@ -20,17 +18,32 @@ client = OpenAI(api_key=api_key)
 
 weave.init("wandb-designers/20questions")
 
-
-
-# List of simple objects for the game
-OBJECTS = [
-    "cat", "dog", "book", "phone", "chair", "table", "car", "tree", 
-    "house", "bicycle", "computer", "pencil", "shoe", "cup", "clock"
-]
+def generate_random_object():
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": """Generate a single common, concrete noun that would work well for a 20 questions game. 
+                The object should be:
+                - Something physical and tangible
+                - Common enough that most people would know it
+                - Simple (not a complex or compound object)
+                - Family-friendly
+                Respond with just the noun in lowercase, nothing else."""},
+                {"role": "user", "content": "Generate a random object."}
+            ],
+            max_tokens=10,
+            temperature=1.0  # Increase randomness
+        )
+        return response.choices[0].message.content.strip().lower()
+    except Exception as e:
+        # Fallback objects in case of API failure
+        fallback_objects = ["book", "chair", "phone", "cup", "pen"]
+        return random.choice(fallback_objects)
 
 def initialize_game_state():
     if 'target_object' not in st.session_state:
-        st.session_state.target_object = random.choice(OBJECTS)
+        st.session_state.target_object = generate_random_object()
     if 'questions_asked' not in st.session_state:
         st.session_state.questions_asked = []
     if 'question_count' not in st.session_state:
@@ -59,7 +72,6 @@ def main():
     # Initialize game state
     initialize_game_state()
     
-
     # Display game instructions
     st.markdown("""
     ### How to Play:
@@ -103,7 +115,7 @@ def main():
 
     # New game button
     if st.button("New Game") or st.session_state.question_count >= 10:
-        st.session_state.target_object = random.choice(OBJECTS)
+        st.session_state.target_object = generate_random_object()
         st.session_state.questions_asked = []
         st.session_state.question_count = 0
         st.session_state.game_over = False
