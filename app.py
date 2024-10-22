@@ -42,6 +42,41 @@ def generate_random_object():
         return random.choice(fallback_objects)
 
 @weave.op()
+def generate_hint(target_object: str, previous_hints: list):
+    """Generate and log a hint for the target object."""
+    try:
+        # Include previous hints in the prompt to avoid repetition
+        previous_hints_str = "\nPrevious hints: " + "; ".join(previous_hints) if previous_hints else ""
+        
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": f"""Generate a helpful but not too obvious hint for the object '{target_object}'.
+                The hint should:
+                - Be a single short sentence
+                - Not directly reveal what the object is
+                - Be different from these previous hints: {previous_hints_str}
+                - Focus on a characteristic, use, or context of the object
+                Respond with just the hint, nothing else."""},
+                {"role": "user", "content": "Generate a hint."}
+            ],
+            max_tokens=50,
+            temperature=0.7
+        )
+        hint = response.choices[0].message.content.strip()
+        return {
+            "target_object": target_object,
+            "hint": hint,
+            "hint_number": len(previous_hints) + 1
+        }
+    except Exception as e:
+        return {
+            "target_object": target_object,
+            "hint": "Unable to generate hint. Please try again.",
+            "hint_number": len(previous_hints) + 1
+        }
+
+@weave.op()
 def process_question(question: str, target_object: str):
     """Process and log a user's question and the AI's response."""
     try:
@@ -85,6 +120,10 @@ def initialize_game_state():
         st.session_state.question_count = 0
     if 'game_over' not in st.session_state:
         st.session_state.game_over = False
+    if 'hints_used' not in st.session_state:
+        st.session_state.hints_used = []
+    if 'hints_remaining' not in st.session_state:
+        st.session_state.hints_remaining = 2
 
 def main():
     st.title("20 Questions Game 🎮")
@@ -96,12 +135,31 @@ def main():
     st.markdown("""
     ### How to Play:
     1. Think of a question that can be answered with Yes/No
-    2. You have 10 questions to guess the object
-    3. Make your guess when you're ready!
+    2. You have 20 questions to guess the object
+    3. You can use up to 2 hints during the game
+    4. Make your guess when you're ready!
     """)
 
-    # Display questions left
-    st.write(f"Questions remaining: {10 - st.session_state.question_count}")
+    # Display questions and hints remaining
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"Questions remaining: {20 - st.session_state.question_count}")
+    with col2:
+        st.write(f"Hints remaining: {st.session_state.hints_remaining}")
+
+    # Hint button
+    if st.button("Get Hint", disabled=st.session_state.game_over or st.session_state.hints_remaining <= 0):
+        if st.session_state.hints_remaining > 0:
+            hint_result = generate_hint(st.session_state.target_object, st.session_state.hints_used)
+            st.session_state.hints_used.append(hint_result["hint"])
+            st.session_state.hints_remaining -= 1
+            st.info(f"💡 Hint: {hint_result['hint']}")
+
+    # Display previous hints
+    if st.session_state.hints_used:
+        st.write("### Hints Used:")
+        for i, hint in enumerate(st.session_state.hints_used, 1):
+            st.write(f"{i}. {hint}")
 
     # Question input
     question = st.text_input("Ask a yes/no question:", disabled=st.session_state.game_over)
@@ -126,7 +184,7 @@ def main():
             st.session_state.game_over = True
         else:
             st.error("Sorry, that's not correct! Try asking more questions.")
-            if st.session_state.question_count >= 10:
+            if st.session_state.question_count >= 20:
                 st.error(f"Game Over! The object was: {st.session_state.target_object}")
                 st.session_state.game_over = True
 
@@ -138,13 +196,15 @@ def main():
             st.write(f"A: {a}")
 
     # New game button
-    if st.button("New Game") or st.session_state.question_count >= 10:
+    if st.button("New Game") or st.session_state.question_count >= 20:
         # Generate and log new target object
         new_object = generate_random_object()
         st.session_state.target_object = new_object
         st.session_state.questions_asked = []
         st.session_state.question_count = 0
         st.session_state.game_over = False
+        st.session_state.hints_used = []
+        st.session_state.hints_remaining = 2
         st.rerun()
 
 if __name__ == "__main__":
