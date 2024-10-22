@@ -1,8 +1,10 @@
 
 import os
+import weave
 import streamlit as st
 from openai import OpenAI
 import random
+
 
 # Determine if we're running in a Streamlit Cloud environment
 is_streamlit_cloud = os.environ.get('STREAMLIT_RUNTIME') == 'true'
@@ -16,7 +18,7 @@ else:
 # Initialize the OpenAI client
 client = OpenAI(api_key=api_key)
 
-#weave.init("wandb-designers/20-questions")
+weave.init("wandb-designers/20questions")
 
 
 
@@ -50,6 +52,7 @@ def get_ai_response(question, target_object):
     except Exception as e:
         return "Error connecting to OpenAI. Please try again."
 
+@weave.op()
 def main():
     st.title("20 Questions Game 🎮")
     
