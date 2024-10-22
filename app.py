@@ -23,22 +23,42 @@ def generate_random_object():
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": """Generate a single common, concrete noun that would work well for a 20 questions game. 
+                {"role": "system", "content": """Generate a random object for a 20 questions game. Pick from a wide variety of categories:
+                
+                Categories to consider:
+                - Kitchen items
+                - Tools and equipment
+                - Electronics and gadgets
+                - Sports equipment
+                - Musical instruments
+                - Transportation items
+                - Clothing and accessories
+                - Outdoor/garden items
+                - Art supplies
+                - Toys and games
+                
                 The object should be:
-                - Something physical and tangible
-                - Common enough that most people would know it
-                - Simple (not a complex or compound object)
+                - A single, physical, tangible item
+                - Common enough to be widely known
+                - Not a brand name
+                - Specific (e.g., 'tennis racket' instead of just 'racket')
                 - Family-friendly
-                Respond with just the noun in lowercase, nothing else."""},
-                {"role": "user", "content": "Generate a random object."}
+                
+                Respond with just the object name in lowercase, nothing else."""},
+                {"role": "user", "content": "Generate a specific, random object from any category."}
             ],
             max_tokens=10,
-            temperature=1.0
+            temperature=1.0  # Maximum randomness
         )
         object_generated = response.choices[0].message.content.strip().lower()
         return object_generated
     except Exception as e:
-        fallback_objects = ["book", "chair", "phone", "cup", "pen"]
+        # Expanded fallback list with more variety
+        fallback_objects = [
+            "tennis ball", "coffee mug", "hammer", "umbrella", "violin",
+            "backpack", "watering can", "paintbrush", "flashlight", "compass",
+            "guitar pick", "measuring tape", "cooking pot", "bicycle pump", "dice"
+        ]
         return random.choice(fallback_objects)
 
 @weave.op()
@@ -126,9 +146,9 @@ def process_guess(guess: str, target_object: str):
 
 def initialize_game_state():
     """Initialize or reset game state."""
-    if 'initialized' not in st.session_state:
+    # Only generate a new object if one doesn't exist
+    if 'target_object' not in st.session_state:
         st.session_state.target_object = generate_random_object()
-        st.session_state.initialized = True
     
     if 'questions_asked' not in st.session_state:
         st.session_state.questions_asked = []
@@ -143,14 +163,24 @@ def initialize_game_state():
 
 def reset_game():
     """Reset the game with a new object."""
-    st.session_state.target_object = generate_random_object()
-    st.session_state.questions_asked = []
-    st.session_state.question_count = 0
-    st.session_state.game_over = False
-    st.session_state.hints_used = []
-    st.session_state.hints_remaining = 2
+    new_object = generate_random_object()
+    # Update all game state at once to avoid async issues
+    st.session_state.update({
+        'target_object': new_object,
+        'questions_asked': [],
+        'question_count': 0,
+        'game_over': False,
+        'hints_used': [],
+        'hints_remaining': 2
+    })
 
 def main():
+    # Make sure these configurations are set before any Streamlit elements
+    st.set_page_config(
+        page_title="20 Questions Game",
+        initial_sidebar_state="collapsed"
+    )
+    
     st.title("20 Questions Game 🎮")
     
     # Initialize game state
@@ -173,7 +203,7 @@ def main():
         st.write(f"Hints remaining: {st.session_state.hints_remaining}")
 
     # Hint button
-    if st.button("Get Hint", disabled=st.session_state.game_over or st.session_state.hints_remaining <= 0):
+    if st.button("Get Hint", disabled=st.session_state.game_over or st.session_state.hints_remaining <= 0, key='hint_button'):
         if st.session_state.hints_remaining > 0:
             hint_result = generate_hint(st.session_state.target_object, st.session_state.hints_used)
             st.session_state.hints_used.append(hint_result["hint"])
@@ -187,41 +217,6 @@ def main():
             st.write(f"{i}. {hint}")
 
     # Question input
-    question = st.text_input("Ask a yes/no question:", disabled=st.session_state.game_over)
+    question = st.text_input("Ask a yes/no question:", disabled=st.session_state.game_over, key='question_input')
 
-    # Submit question button
-    if st.button("Ask", disabled=st.session_state.game_over):
-        if question:
-            qa_result = process_question(question, st.session_state.target_object)
-            st.session_state.questions_asked.append((qa_result["question"], qa_result["answer"]))
-            st.session_state.question_count += 1
-
-    # Make a guess
-    guess = st.text_input("Make your guess:", disabled=st.session_state.game_over)
-    
-    if st.button("Submit Guess", disabled=st.session_state.game_over):
-        guess_result = process_guess(guess, st.session_state.target_object)
-        
-        if guess_result["is_correct"]:
-            st.success(f"🎉 Congratulations! You got it right! It was a {st.session_state.target_object}!")
-            st.session_state.game_over = True
-        else:
-            st.error("Sorry, that's not correct! Try asking more questions.")
-            if st.session_state.question_count >= 20:
-                st.error(f"Game Over! The object was: {st.session_state.target_object}")
-                st.session_state.game_over = True
-
-    # Display question history
-    if st.session_state.questions_asked:
-        st.write("### Question History:")
-        for q, a in st.session_state.questions_asked:
-            st.write(f"Q: {q}")
-            st.write(f"A: {a}")
-
-    # New game button
-    if st.button("New Game") or st.session_state.question_count >= 20:
-        reset_game()
-        st.rerun()
-
-if __name__ == "__main__":
-    main()
+    # Submi
