@@ -1,6 +1,24 @@
+
+import os
 import streamlit as st
-import openai
+from openai import OpenAI
 import random
+
+# Determine if we're running in a Streamlit Cloud environment
+is_streamlit_cloud = os.environ.get('STREAMLIT_RUNTIME') == 'true'
+if is_streamlit_cloud:
+    # Use Streamlit secrets for production
+    api_key = st.secrets["OPENAI_API_KEY"]
+else:
+    # Use environment variable for local development
+    api_key = os.getenv("OPENAI_API_KEY")
+
+# Initialize the OpenAI client
+client = OpenAI(api_key=api_key)
+
+#weave.init("wandb-designers/20-questions")
+
+
 
 # List of simple objects for the game
 OBJECTS = [
@@ -20,7 +38,7 @@ def initialize_game_state():
 
 def get_ai_response(question, target_object):
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": f"You are playing a 20 questions game. The object is '{target_object}'. Answer only with 'Yes', 'No', or 'Maybe'. Be accurate but don't reveal what the object is."},
@@ -38,12 +56,6 @@ def main():
     # Initialize game state
     initialize_game_state()
     
-    # Setup OpenAI API key
-    openai.api_key = st.sidebar.text_input("Enter your OpenAI API key", type="password")
-    
-    if not openai.api_key:
-        st.warning("Please enter your OpenAI API key to play.")
-        return
 
     # Display game instructions
     st.markdown("""
@@ -92,7 +104,7 @@ def main():
         st.session_state.questions_asked = []
         st.session_state.question_count = 0
         st.session_state.game_over = False
-        st.experimental_rerun()
+        st.rerun()
 
 if __name__ == "__main__":
     main()
