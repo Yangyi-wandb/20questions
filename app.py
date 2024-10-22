@@ -219,4 +219,39 @@ def main():
     # Question input
     question = st.text_input("Ask a yes/no question:", disabled=st.session_state.game_over, key='question_input')
 
-    # Submi
+    # Submit question button
+    if st.button("Ask", disabled=st.session_state.game_over, key='ask_button'):
+        if question:
+            qa_result = process_question(question, st.session_state.target_object)
+            st.session_state.questions_asked.append((qa_result["question"], qa_result["answer"]))
+            st.session_state.question_count += 1
+
+    # Make a guess
+    guess = st.text_input("Make your guess:", disabled=st.session_state.game_over, key='guess_input')
+    
+    if st.button("Submit Guess", disabled=st.session_state.game_over, key='guess_button'):
+        guess_result = process_guess(guess, st.session_state.target_object)
+        
+        if guess_result["is_correct"]:
+            st.success(f"🎉 Congratulations! You got it right! It was a {st.session_state.target_object}!")
+            st.session_state.game_over = True
+        else:
+            st.error("Sorry, that's not correct! Try asking more questions.")
+            if st.session_state.question_count >= 20:
+                st.error(f"Game Over! The object was: {st.session_state.target_object}")
+                st.session_state.game_over = True
+
+    # Display question history
+    if st.session_state.questions_asked:
+        st.write("### Question History:")
+        for q, a in st.session_state.questions_asked:
+            st.write(f"Q: {q}")
+            st.write(f"A: {a}")
+
+    # New game button
+    if st.button("New Game", key='new_game_button') or st.session_state.question_count >= 20:
+        reset_game()
+        st.rerun()
+
+if __name__ == "__main__":
+    main()
