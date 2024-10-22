@@ -7,10 +7,8 @@ import random
 # Determine if we're running in a Streamlit Cloud environment
 is_streamlit_cloud = os.environ.get('STREAMLIT_RUNTIME') == 'true'
 if is_streamlit_cloud:
-    # Use Streamlit secrets for production
     api_key = st.secrets["OPENAI_API_KEY"]
 else:
-    # Use environment variable for local development
     api_key = os.getenv("OPENAI_API_KEY")
 
 # Initialize the OpenAI client
@@ -18,7 +16,9 @@ client = OpenAI(api_key=api_key)
 
 weave.init("wandb-designers/20questions")
 
+@weave.op()
 def generate_random_object():
+    """Generate and log a random object for the game."""
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -33,13 +33,48 @@ def generate_random_object():
                 {"role": "user", "content": "Generate a random object."}
             ],
             max_tokens=10,
-            temperature=1.0  # Increase randomness
+            temperature=1.0
         )
-        return response.choices[0].message.content.strip().lower()
+        object_generated = response.choices[0].message.content.strip().lower()
+        return object_generated
     except Exception as e:
-        # Fallback objects in case of API failure
         fallback_objects = ["book", "chair", "phone", "cup", "pen"]
         return random.choice(fallback_objects)
+
+@weave.op()
+def process_question(question: str, target_object: str):
+    """Process and log a user's question and the AI's response."""
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": f"You are playing a 20 questions game. The object is '{target_object}'. Answer only with 'Yes', 'No', or 'Maybe'. Be accurate but don't reveal what the object is."},
+                {"role": "user", "content": question}
+            ],
+            max_tokens=50
+        )
+        ai_answer = response.choices[0].message.content.strip()
+        return {
+            "question": question,
+            "answer": ai_answer,
+            "target_object": target_object
+        }
+    except Exception as e:
+        return {
+            "question": question,
+            "answer": "Error connecting to OpenAI. Please try again.",
+            "target_object": target_object
+        }
+
+@weave.op()
+def process_guess(guess: str, target_object: str):
+    """Process and log a user's guess and the result."""
+    is_correct = guess.lower() == target_object.lower()
+    return {
+        "guess": guess,
+        "target_object": target_object,
+        "is_correct": is_correct
+    }
 
 def initialize_game_state():
     if 'target_object' not in st.session_state:
@@ -51,21 +86,6 @@ def initialize_game_state():
     if 'game_over' not in st.session_state:
         st.session_state.game_over = False
 
-def get_ai_response(question, target_object):
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": f"You are playing a 20 questions game. The object is '{target_object}'. Answer only with 'Yes', 'No', or 'Maybe'. Be accurate but don't reveal what the object is."},
-                {"role": "user", "content": question}
-            ],
-            max_tokens=50
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return "Error connecting to OpenAI. Please try again."
-
-@weave.op()
 def main():
     st.title("20 Questions Game 🎮")
     
@@ -89,15 +109,19 @@ def main():
     # Submit question button
     if st.button("Ask", disabled=st.session_state.game_over):
         if question:
-            answer = get_ai_response(question, st.session_state.target_object)
-            st.session_state.questions_asked.append((question, answer))
+            # Process and log the question
+            qa_result = process_question(question, st.session_state.target_object)
+            st.session_state.questions_asked.append((qa_result["question"], qa_result["answer"]))
             st.session_state.question_count += 1
 
     # Make a guess
     guess = st.text_input("Make your guess:", disabled=st.session_state.game_over)
     
     if st.button("Submit Guess", disabled=st.session_state.game_over):
-        if guess.lower() == st.session_state.target_object.lower():
+        # Process and log the guess
+        guess_result = process_guess(guess, st.session_state.target_object)
+        
+        if guess_result["is_correct"]:
             st.success(f"🎉 Congratulations! You got it right! It was a {st.session_state.target_object}!")
             st.session_state.game_over = True
         else:
@@ -115,7 +139,9 @@ def main():
 
     # New game button
     if st.button("New Game") or st.session_state.question_count >= 10:
-        st.session_state.target_object = generate_random_object()
+        # Generate and log new target object
+        new_object = generate_random_object()
+        st.session_state.target_object = new_object
         st.session_state.questions_asked = []
         st.session_state.question_count = 0
         st.session_state.game_over = False
